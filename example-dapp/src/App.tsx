@@ -2,15 +2,11 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
 import { useWallet, WalletProvider, ConnectionProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
-import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
+import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import type { Adapter } from '@solana/wallet-adapter-base';
-import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
-import { verifySignIn } from '@solana/wallet-standard-util';
+import type { SolanaSignInInput } from '@solana/wallet-standard-features';
 
-import {
-  createSignInData,
-  createSignInErrorData,
-} from './utils';
+import { createSignInData, createSignInErrorData } from './utils';
 
 import { TLog } from './types';
 
@@ -41,14 +37,13 @@ const message = 'To avoid digital dognappers, sign below to authenticate with Cr
 
 export type ConnectedMethods =
   | {
-    name: string;
-    onClick: () => Promise<string>;
-  }
+      name: string;
+      onClick: () => Promise<string>;
+    }
   | {
-    name: string;
-    onClick: () => Promise<void>;
-  };
-
+      name: string;
+      onClick: () => Promise<void>;
+    };
 
 const StatelessApp = () => {
   const { wallet, publicKey, connect, disconnect, signMessage, signIn } = useWallet();
@@ -98,25 +93,27 @@ const StatelessApp = () => {
   }, [createLog, publicKey, signMessage, wallet]);
 
   /** SignIn */
-  const handleSignIn = useCallback(async () => {
-    if (!publicKey || !wallet) return;
-    const signInData = await createSignInData();
+  // const handleSignIn = useCallback(async () => {
+  //   if (!publicKey || !wallet) return;
+  //   const signInData = await createSignInData();
 
-    try {
-      const {account, signedMessage, signature} = await signIn(signInData);
-      createLog({
-        status: 'success',
-        method: 'signIn',
-        message: `Message signed: ${JSON.stringify(signedMessage)} by ${account.address} with signature ${JSON.stringify(signature)}`,
-      });
-    } catch (error) {
-      createLog({
-        status: 'error',
-        method: 'signIn',
-        message: error.message,
-      });
-    }
-  }, [createLog, publicKey, signIn, wallet]);
+  //   try {
+  //     const { account, signedMessage, signature } = await signIn(signInData);
+  //     createLog({
+  //       status: 'success',
+  //       method: 'signIn',
+  //       message: `Message signed: ${JSON.stringify(signedMessage)} by ${
+  //         account.address
+  //       } with signature ${JSON.stringify(signature)}`,
+  //     });
+  //   } catch (error) {
+  //     createLog({
+  //       status: 'error',
+  //       method: 'signIn',
+  //       message: error.message,
+  //     });
+  //   }
+  // }, [createLog, publicKey, signIn, wallet]);
 
   /** SignInError */
   const handleSignInError = useCallback(async () => {
@@ -124,11 +121,13 @@ const StatelessApp = () => {
     const signInData = await createSignInErrorData();
 
     try {
-      const {account, signedMessage, signature} = await signIn(signInData);
+      const { account, signedMessage, signature } = await signIn(signInData);
       createLog({
         status: 'success',
         method: 'signMessage',
-        message: `Message signed: ${JSON.stringify(signedMessage)} by ${account.address} with signature ${JSON.stringify(signature)}`,
+        message: `Message signed: ${JSON.stringify(signedMessage)} by ${
+          account.address
+        } with signature ${JSON.stringify(signature)}`,
       });
     } catch (error) {
       createLog({
@@ -180,10 +179,10 @@ const StatelessApp = () => {
         name: 'Sign Message',
         onClick: handleSignMessage,
       },
-      {
-        name: 'Sign In',
-        onClick: handleSignIn,
-      },
+      // {
+      //   name: 'Sign In',
+      //   onClick: handleSignIn,
+      // },
       {
         name: 'Sign In Error',
         onClick: handleSignInError,
@@ -193,12 +192,7 @@ const StatelessApp = () => {
         onClick: handleDisconnect,
       },
     ];
-  }, [
-    handleSignMessage,
-    handleSignIn,
-    handleSignInError,
-    handleDisconnect,
-  ]);
+  }, [handleSignMessage, handleSignInError, handleDisconnect]);
 
   return (
     <StyledApp>
@@ -223,56 +217,69 @@ const App = () => {
   );
 
   const autoSignIn = useCallback(async (adapter: Adapter) => {
-    if (!('signIn' in adapter)) return true;
+    if (!('signIn' in adapter)) {
+      return true;
+    }
 
     // Fetch the signInInput from the backend
-    /*
-    const createResponse = await fetch("/backend/createSignInData");
+
+    const createResponse = await fetch('http://localhost:4000/api/createSignInData', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        uri: window.location.href,
+      }),
+    });
     const input: SolanaSignInInput = await createResponse.json();
-    */
-    const input: SolanaSignInInput = await createSignInData();
+
+    // const input: SolanaSignInInput = await createSignInData();
 
     // Send the signInInput to the wallet and trigger a sign-in request
     const output = await adapter.signIn(input);
-    const constructPayload = JSON.stringify({input, output});
+    const constructPayload = JSON.stringify({ input, output, publicKey: output.account.publicKey });
 
     // Verify the sign-in output against the generated input server-side
-    /*
-    const verifyResponse = await fetch("/backend/verifySIWS", {
-      method: "POST",
-      body: strPayload,
+
+    const verifyResponse = await fetch('http://localhost:4000/api/verifySIWS', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: constructPayload,
     });
     const success = await verifyResponse.json();
-    */
 
     /* ------------------------------------ BACKEND ------------------------------------ */
     // "/backend/verifySIWS" endpoint, `constructPayload` receieved
-    const deconstructPayload: { input: SolanaSignInInput; output: SolanaSignInOutput } = JSON.parse(constructPayload);
-    const backendInput = deconstructPayload.input;
-    const backendOutput: SolanaSignInOutput = {
-      account: {
-        publicKey: new Uint8Array(output.account.publicKey),
-        ...output.account
-      },
-      signature: new Uint8Array(output.signature),
-      signedMessage: new Uint8Array(output.signedMessage),
-    };
-
-    if (!verifySignIn(backendInput, backendOutput)) {
-      console.error('Sign In verification failed!')
+    if (!success) {
+      console.error('Sign In verification failed!');
       throw new Error('Sign In verification failed!');
+    } else {
+      return false;
     }
     /* ------------------------------------ BACKEND ------------------------------------ */
-
-    return false;
   }, []);
 
-  const autoConnect = useCallback(async (adapter: Adapter) => {
-    adapter.autoConnect().catch((e) => {
-      return autoSignIn(adapter);
-    });
-    return false;
-  }, [autoSignIn]);
+  const autoConnect = useCallback(
+    async (adapter: Adapter) => {
+      console.log('autoConnect:', adapter);
+      console.log(window.location.href);
+      // const a = await adapter.autoConnect();
+      // console.log(a);
+      adapter
+        .autoConnect()
+        .then((res) => {
+          console.log(res);
+        })
+        .catch((e) => {
+          return autoSignIn(adapter);
+        });
+      return false;
+    },
+    [autoSignIn]
+  );
 
   return (
     <AutoConnectProvider>
