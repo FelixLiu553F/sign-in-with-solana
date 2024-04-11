@@ -4,13 +4,16 @@ import { useWallet, WalletProvider, ConnectionProvider } from '@solana/wallet-ad
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import type { Adapter } from '@solana/wallet-adapter-base';
-import type { SolanaSignInInput } from '@solana/wallet-standard-features';
+import type { SolanaSignInInput, SolanaSignInOutput } from '@solana/wallet-standard-features';
 
 import { createSignInData, createSignInErrorData } from './utils';
 
 import { TLog } from './types';
 
 import { Logs, Sidebar, AutoConnectProvider } from './components';
+import { verifySignIn } from './myTestSign';
+import { buffer } from 'stream/consumers';
+// import { verifySignIn } from '@solana/wallet-standard-util';
 
 // =============================================================================
 // Styled Components
@@ -230,32 +233,56 @@ const App = () => {
       },
       body: JSON.stringify({
         uri: window.location.href,
+        publicKey: 'HE8pSJWmUKcw1z8aBk6SYCDjfBxBF4tY9MziThCEsT1K',
       }),
     });
-    const input: SolanaSignInInput = await createResponse.json();
+    const inputB: SolanaSignInInput & { publicKey: string } = await createResponse.json();
 
     // const input: SolanaSignInInput = await createSignInData();
+    console.log('input', inputB);
+
+    const { publicKey, ...input } = inputB;
 
     // Send the signInInput to the wallet and trigger a sign-in request
     const output = await adapter.signIn(input);
+    console.log('output', output);
     const constructPayload = JSON.stringify({ input, output, publicKey: output.account.publicKey });
 
     // Verify the sign-in output against the generated input server-side
 
+    /* ------------------------------------ BACKEND ------------------------------------ */
+    const deconstructPayload: { input: SolanaSignInInput; output: SolanaSignInOutput } = JSON.parse(constructPayload);
+    const backendInput = deconstructPayload.input;
+    console.log(Array.from(output.account.publicKey));
+    // console.log(output.account.publicKey.toString('base64'));
+    const backendOutput = {
+      account: {
+        publicKey: Array.from(output.account.publicKey),
+        ...output.account,
+      },
+      signature: Array.from(output.signature),
+      signedMessage: Array.from(output.signedMessage),
+    };
+    console.log('backendInput:', backendInput);
+    console.log('backendOutput:', backendOutput);
+
+    // if (!verifySignIn(backendInput, backendOutput)) {
+    //   console.error('Sign In verification failed!');
+    //   throw new Error('Sign In verification failed!');
+    // }
+    // "/backend/verifySIWS" endpoint, `constructPayload` receieved
     const verifyResponse = await fetch('http://localhost:4000/api/verifySIWS', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: constructPayload,
+      body: JSON.stringify({ input, output: { ...backendOutput, type: 'phantom' } }),
     });
     const success = await verifyResponse.json();
-
-    /* ------------------------------------ BACKEND ------------------------------------ */
-    // "/backend/verifySIWS" endpoint, `constructPayload` receieved
+    console.log(success);
     if (!success) {
-      console.error('Sign In verification failed!');
-      throw new Error('Sign In verification failed!');
+      console.error('backend Sign In verification failed!');
+      throw new Error('backend Sign In verification failed!');
     } else {
       return false;
     }
